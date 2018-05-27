@@ -13,17 +13,53 @@ resource "aws_ecs_task_definition" "proxy" {
   family        = "${aws_cloudwatch_log_group.proxy.name}"
   task_role_arn = "${aws_iam_role.proxy.arn}"
 
+  volume = {
+    name      = "docker_socket"
+    host_path = "/var/run/docker.sock"
+  }
+
+  # This directory keeps your certificates persistent so let's encrypt
+  # doesn't need to regenerate them every time the containers restart
+  volume = {
+    name      = "certificates"
+    host_path = "/root/certs"
+  }
+
+  volume = {
+    name = "vhosts"
+  }
+
+  volume = {
+    name = "html"
+  }
+
   container_definitions = <<DEF
 [
   {
     "name": "proxy",
-    "image": "jwilder/nginx-proxy:alpine-0.7.0",
+    "image": "jwilder/nginx-proxy:alpine",
     "cpu": 8,
     "memoryReservation": 10,
     "essential": true,
-    "links": [
-        "proxy-mysql:mysql",
-        "proxy-php:php-fpm"
+    "mountPoints": [
+      {
+        "sourceVolume": "docker_socket",
+        "containerPath": "/tmp/docker.sock",
+        "readonly": true
+      },
+      {
+        "sourceVolume": "vhosts",
+        "containerPath": "/etc/nginx/vhost.d"
+      },
+      {
+        "sourceVolume": "html",
+        "containerPath": "/usr/share/nginx/html"
+      },
+      {
+        "sourceVolume": "certificates",
+        "containerPath": "/etc/nginx/certs",
+        "readonly": true
+      }
     ],
     "portMappings": [
       {
@@ -35,13 +71,16 @@ resource "aws_ecs_task_definition" "proxy" {
         "hostPort": 443
       }
     ],
+    "DockerLabels" : {
+      "com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy": "true"
+    },
     "hostname": "${aws_cloudwatch_log_group.proxy.name}",
     "logConfiguration": {
       "logDriver": "awslogs",
       "options": {
         "awslogs-group": "${aws_cloudwatch_log_group.proxy.name}",
         "awslogs-region": "eu-west-1",
-        "awslogs-stream-prefix": "1-13"
+        "awslogs-stream-prefix": "latest"
       }
     }
   },
@@ -51,13 +90,30 @@ resource "aws_ecs_task_definition" "proxy" {
     "cpu": 8,
     "memoryReservation": 10,
     "essential": true,
+    "volumesFrom": [
+      {
+        "sourceContainer": "proxy"
+      }
+    ],
+    "mountPoints": [
+      {
+        "sourceVolume": "docker_socket",
+        "containerPath": "/tmp/docker.sock",
+        "readonly": true
+      },
+      {
+        "sourceVolume": "certificates",
+        "containerPath": "/etc/nginx/certs",
+        "readonly": false
+      }
+    ],
     "hostname": "${aws_cloudwatch_log_group.sslTermination.name}",
     "logConfiguration": {
       "logDriver": "awslogs",
       "options": {
         "awslogs-group": "${aws_cloudwatch_log_group.sslTermination.name}",
         "awslogs-region": "eu-west-1",
-        "awslogs-stream-prefix": "5-7"
+        "awslogs-stream-prefix": "latest"
       }
     }
   }
