@@ -22,7 +22,7 @@ resource "aws_ecs_task_definition" "proxy" {
   # doesn't need to regenerate them every time the containers restart
   volume = {
     name      = "certificates"
-    host_path = "/root/certs"
+    host_path = "/home/ec2-user/certs"
   }
 
   volume = {
@@ -71,7 +71,7 @@ resource "aws_ecs_task_definition" "proxy" {
         "hostPort": 443
       }
     ],
-    "DockerLabels" : {
+    "dockerLabels" : {
       "com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy": "true"
     },
     "hostname": "${aws_cloudwatch_log_group.proxy.name}",
@@ -126,7 +126,6 @@ resource "aws_cloudwatch_log_group" "proxy" {
   retention_in_days = 14
 
   tags {
-    contract    = "${var.contract}"
     environment = "${var.environment}"
     services    = "proxy"
   }
@@ -137,7 +136,6 @@ resource "aws_cloudwatch_log_group" "sslTermination" {
   retention_in_days = 14
 
   tags {
-    contract    = "${var.contract}"
     environment = "${var.environment}"
     services    = "proxy-ssl-termination"
   }
